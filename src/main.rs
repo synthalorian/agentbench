@@ -14,16 +14,21 @@ mod tui;
 mod web;
 
 use crate::benchmark::{
-    livecodebench::LiveCodeBenchSuite, swe_bench::SWEBenchSuite,
-    terminal_bench::TerminalBenchSuite, BenchmarkRegistry, BenchmarkRunConfig, BenchmarkSuite,
+    livecodebench::LiveCodeBenchSuite,
+    swe_bench::SWEBenchSuite,
+    terminal_bench::TerminalBenchSuite,
+    BenchmarkRegistry, BenchmarkRunConfig, BenchmarkSuite,
 };
 use crate::cli::{Cli, Commands};
 use crate::config::BenchmarkConfig;
 use crate::db::Database;
 use crate::harness::{
-    claude_code::ClaudeCodeHarness, codex::CodexHarness, generic::GenericOpenAIHarness,
-    hermes::HermesHarness, openshark::OpenSharkHarness, HarnessAdapter, HarnessAdapterConfig,
-    HarnessRegistry,
+    claude_code::ClaudeCodeHarness,
+    codex::CodexHarness,
+    generic::GenericOpenAIHarness,
+    hermes::HermesHarness,
+    openshark::OpenSharkHarness,
+    HarnessAdapter, HarnessAdapterConfig, HarnessRegistry,
 };
 use crate::runner::Runner;
 
@@ -41,126 +46,68 @@ async fn main() -> anyhow::Result<()> {
             let bench_config = BenchmarkConfig::from_file(&config)?;
             let db = Arc::new(Database::new("agentbench.db")?);
 
-            let mut harness_registry = HarnessRegistry::new();
-            harness_registry.register("generic".to_string(), Box::new(GenericOpenAIHarness::new()));
-            harness_registry.register("openshark".to_string(), Box::new(OpenSharkHarness::new()));
-            harness_registry.register("hermes".to_string(), Box::new(HermesHarness::new()));
-            harness_registry.register(
-                "claude_code".to_string(),
-                Box::new(ClaudeCodeHarness::new()),
-            );
-            harness_registry.register("opencode".to_string(), Box::new(crate::harness::opencode::OpenCodeHarness::new()));
-
-            let mut benchmark_registry = BenchmarkRegistry::new();
-            benchmark_registry.register("swe_bench".to_string(), Box::new(SWEBenchSuite::new()));
-            benchmark_registry.register(
-                "terminal_bench".to_string(),
-                Box::new(TerminalBenchSuite::new()),
-            );
-            benchmark_registry.register(
-                "livecodebench".to_string(),
-                Box::new(LiveCodeBenchSuite::new()),
-            );
-
-            let mut harness_box = match harness.as_str() {
-                "generic" => GenericOpenAIHarness::new(),
+            // Build harness
+            let harness_adapter: Box<dyn HarnessAdapter> = match harness.as_str() {
+                "generic" => {
+                    let mut h = GenericOpenAIHarness::new();
+                    h.init(build_harness_config(&harness, &bench_config)).await?;
+                    Box::new(h)
+                }
                 "openshark" => {
                     let mut h = OpenSharkHarness::new();
-                    h.init(HarnessAdapterConfig {
-                        name: harness.clone(),
-                        endpoint: bench_config.harness.endpoint.clone(),
-                        api_key: bench_config.harness.api_key.clone(),
-                        model: bench_config.harness.model.clone(),
-                        extra: bench_config.harness.extra.clone().unwrap_or_default(),
-                    })
-                    .await?;
-                    // Need to handle this differently since types differ
-                    // For now, use generic harness for all
-                    GenericOpenAIHarness::new()
+                    h.init(build_harness_config(&harness, &bench_config)).await?;
+                    Box::new(h)
                 }
                 "hermes" => {
                     let mut h = HermesHarness::new();
-                    h.init(HarnessAdapterConfig {
-                        name: harness.clone(),
-                        endpoint: bench_config.harness.endpoint.clone(),
-                        api_key: bench_config.harness.api_key.clone(),
-                        model: bench_config.harness.model.clone(),
-                        extra: bench_config.harness.extra.clone().unwrap_or_default(),
-                    })
-                    .await?;
-                    GenericOpenAIHarness::new()
+                    h.init(build_harness_config(&harness, &bench_config)).await?;
+                    Box::new(h)
                 }
                 "claude_code" => {
                     let mut h = ClaudeCodeHarness::new();
-                    h.init(HarnessAdapterConfig {
-                        name: harness.clone(),
-                        endpoint: bench_config.harness.endpoint.clone(),
-                        api_key: bench_config.harness.api_key.clone(),
-                        model: bench_config.harness.model.clone(),
-                        extra: bench_config.harness.extra.clone().unwrap_or_default(),
-                    })
-                    .await?;
-                    GenericOpenAIHarness::new()
+                    h.init(build_harness_config(&harness, &bench_config)).await?;
+                    Box::new(h)
                 }
                 "codex" => {
                     let mut h = CodexHarness::new();
-                    h.init(HarnessAdapterConfig {
-                        name: harness.clone(),
-                        endpoint: bench_config.harness.endpoint.clone(),
-                        api_key: bench_config.harness.api_key.clone(),
-                        model: bench_config.harness.model.clone(),
-                        extra: bench_config.harness.extra.clone().unwrap_or_default(),
-                    })
-                    .await?;
-                    GenericOpenAIHarness::new()
+                    h.init(build_harness_config(&harness, &bench_config)).await?;
+                    Box::new(h)
                 }
                 "opencode" => {
                     let mut h = crate::harness::opencode::OpenCodeHarness::new();
-                    h.init(HarnessAdapterConfig {
-                        name: harness.clone(),
-                        endpoint: bench_config.harness.endpoint.clone(),
-                        api_key: bench_config.harness.api_key.clone(),
-                        model: bench_config.harness.model.clone(),
-                        extra: bench_config.harness.extra.clone().unwrap_or_default(),
-                    })
-                    .await?;
-                    GenericOpenAIHarness::new()
+                    h.init(build_harness_config(&harness, &bench_config)).await?;
+                    Box::new(h)
                 }
-                _ => GenericOpenAIHarness::new(),
+                _ => {
+                    return Err(anyhow::anyhow!("Unknown harness: {}", harness));
+                }
             };
 
-            harness_box
-                .init(HarnessAdapterConfig {
-                    name: harness.clone(),
-                    endpoint: bench_config.harness.endpoint.clone(),
-                    api_key: bench_config.harness.api_key.clone(),
-                    model: bench_config.harness.model.clone(),
-                    extra: bench_config.harness.extra.clone().unwrap_or_default(),
-                })
-                .await?;
+            let harness_arc: Arc<dyn HarnessAdapter> = harness_adapter.into();
 
-            let harness_arc: Arc<dyn HarnessAdapter> = Arc::new(harness_box);
-
-            let mut suite_box = match bench_config.benchmark_type.as_str() {
+            // Build benchmark suite
+            let mut suite_box: Box<dyn BenchmarkSuite> = match bench_config.benchmark_type.as_str() {
                 "swe_bench" => {
                     let mut s = SWEBenchSuite::new();
                     s.load_tasks(&bench_config.dataset).await?;
-                    // Need to return as trait object - this is tricky with concrete types
-                    // For now just use SWEBenchSuite
-                    s
+                    Box::new(s)
                 }
                 "terminal_bench" => {
                     let mut s = TerminalBenchSuite::new();
                     s.load_tasks(&bench_config.dataset).await?;
-                    // Same issue
-                    SWEBenchSuite::new()
+                    Box::new(s)
                 }
                 "livecodebench" => {
                     let mut s = LiveCodeBenchSuite::new();
                     s.load_tasks(&bench_config.dataset).await?;
-                    SWEBenchSuite::new()
+                    Box::new(s)
                 }
-                _ => SWEBenchSuite::new(),
+                _ => {
+                    return Err(anyhow::anyhow!(
+                        "Unknown benchmark: {}",
+                        bench_config.benchmark_type
+                    ));
+                }
             };
 
             let run_config = BenchmarkRunConfig {
@@ -172,7 +119,7 @@ async fn main() -> anyhow::Result<()> {
 
             let runner = Runner::new(db.clone());
             let results = runner
-                .run(harness_arc, &suite_box, &run_config, &bench_config)
+                .run(harness_arc, suite_box.as_ref(), &run_config, &bench_config)
                 .await?;
 
             match output.as_str() {
@@ -231,4 +178,14 @@ async fn main() -> anyhow::Result<()> {
     }
 
     Ok(())
+}
+
+fn build_harness_config(harness_name: &str, bench_config: &BenchmarkConfig) -> HarnessAdapterConfig {
+    HarnessAdapterConfig {
+        name: harness_name.to_string(),
+        endpoint: bench_config.harness.endpoint.clone(),
+        api_key: bench_config.harness.api_key.clone(),
+        model: bench_config.harness.model.clone(),
+        extra: bench_config.harness.extra.clone().unwrap_or_default(),
+    }
 }
