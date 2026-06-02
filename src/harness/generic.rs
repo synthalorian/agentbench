@@ -1,15 +1,20 @@
 use async_trait::async_trait;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
-use serde_json::json;
 use std::collections::HashMap;
 
-use super::{HarnessAdapter, HarnessAdapterConfig, Task, TaskResponse, ToolCall};
+use super::{HarnessAdapter, HarnessAdapterConfig, Task, TaskResponse};
 use crate::error::{BenchError, BenchResult};
 
 pub struct GenericOpenAIHarness {
     config: Option<HarnessAdapterConfig>,
     client: Client,
+}
+
+impl Default for GenericOpenAIHarness {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl GenericOpenAIHarness {
@@ -60,7 +65,7 @@ struct Usage {
 #[async_trait]
 impl HarnessAdapter for GenericOpenAIHarness {
     fn name(&self) -> &str {
-        "generic"
+        "generic-openai"
     }
 
     fn description(&self) -> &str {
@@ -84,9 +89,7 @@ impl HarnessAdapter for GenericOpenAIHarness {
             .ok_or_else(|| BenchError::Harness("No endpoint configured".to_string()))?;
 
         let model = config
-            .model
-            .as_ref()
-            .map(|s| s.as_str())
+            .model.as_deref()
             .unwrap_or("local-model");
 
         let max_tokens = config

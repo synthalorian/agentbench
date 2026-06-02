@@ -11,6 +11,12 @@ pub struct HermesHarness {
     client: Client,
 }
 
+impl Default for HermesHarness {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl HermesHarness {
     pub fn new() -> Self {
         Self {

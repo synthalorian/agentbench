@@ -1,0 +1,37 @@
+[
+  {
+    "instance_id": "swe-bench-sample-1",
+    "repo": "psf/requests",
+    "base_commit": "v2.31.0",
+    "problem_statement": "Fix SSL verification bypass vulnerability in requests library. The verify parameter should not accept string values that bypass SSL checks.",
+    "test_patch": "diff --git a/tests/test_requests.py b/tests/test_requests.py\n--- a/tests/test_requests.py\n+++ b/tests/test_requests.py\n@@ -100,5 +100,10 @@ class TestRequests:\n         assert response.status_code == 200\n \n+    def test_ssl_verification_strict(self):\n+        with pytest.raises(ValueError):\n+            requests.get('https://example.com', verify='false')\n+        with pytest.raises(ValueError):\n+            requests.get('https://example.com', verify='no')\n"
+  },
+  {
+    "instance_id": "swe-bench-sample-2",
+    "repo": "pallets/flask",
+    "base_commit": "v2.3.0",
+    "problem_statement": "Fix route decorator not preserving function metadata. The @app.route decorator should use functools.wraps to preserve docstrings and function names.",
+    "test_patch": "diff --git a/tests/test_routing.py b/tests/test_routing.py\n--- a/tests/test_routing.py\n+++ b/tests/test_routing.py\n@@ -50,5 +50,10 @@ class TestRouting:\n         assert response.status_code == 200\n \n+    def test_route_preserves_metadata(self):\n+        @app.route('/')\n+        def index():\n+            \"\"\"Home page\"\"\"\n+            return 'Hello'\n+        assert index.__name__ == 'index'\n+        assert index.__doc__ == 'Home page'\n"
+  },
+  {
+    "instance_id": "swe-bench-sample-3",
+    "repo": "django/django",
+    "base_commit": "v4.2.0",
+    "problem_statement": "Fix QuerySet caching issue where repeated filter() calls don't invalidate the cache. The _result_cache should be cleared when filter() is called.",
+    "test_patch": "diff --git a/tests/test_queryset.py b/tests/test_queryset.py\n--- a/tests/test_queryset.py\n+++ b/tests/test_queryset.py\n@@ -75,5 +75,10 @@ class TestQuerySet:\n         assert len(qs) == 5\n \n+    def test_filter_clears_cache(self):\n+        qs = Model.objects.all()\n+        list(qs)  # populate cache\n+        qs = qs.filter(active=True)\n+        assert qs._result_cache is None\n"
+  },
+  {
+    "instance_id": "swe-bench-sample-4",
+    "repo": "pytest-dev/pytest",
+    "base_commit": "v7.4.0",
+    "problem_statement": "Fix fixture scope validation. Session-scoped fixtures should not depend on function-scoped fixtures.",
+    "test_patch": "diff --git a/tests/test_fixtures.py b/tests/test_fixtures.py\n--- a/tests/test_fixtures.py\n+++ b/tests/test_fixtures.py\n@@ -30,5 +30,12 @@ class TestFixtures:\n         assert fixture_b == 'b'\n \n+    def test_session_scope_validation(self):\n+        with pytest.raises(ValueError):\n+            @pytest.fixture(scope='session')\n+            def bad_fixture(function_fixture):\n+                return function_fixture\n+\n"
+  },
+  {
+    "instance_id": "swe-bench-sample-5",
+    "repo": "numpy/numpy",
+    "base_commit": "v1.24.0",
+    "problem_statement": "Fix array slicing with negative step. Array[::-1] should correctly reverse the array without memory corruption.",
+    "test_patch": "diff --git a/tests/test_array.py b/tests/test_array.py\n--- a/tests/test_array.py\n+++ b/tests/test_array.py\n@@ -20,5 +20,10 @@ class TestArray:\n         assert arr[1:3].tolist() == [2, 3]\n \n+    def test_negative_step_slice(self):\n+        arr = np.array([1, 2, 3, 4, 5])\n+        reversed_arr = arr[::-1]\n+        assert reversed_arr.tolist() == [5, 4, 3, 2, 1]\n+        assert arr[2::-1].tolist() == [3, 2, 1]\n"
+  }
+]

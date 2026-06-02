@@ -15,15 +15,18 @@ use std::io;
 
 use app::App;
 use ui::draw;
+use std::sync::Arc;
+use crate::db::Database;
 
 pub async fn run_tui() -> anyhow::Result<()> {
+    let db = Arc::new(Database::new("agentbench.db")?);
     enable_raw_mode()?;
     let mut stdout = io::stdout();
     execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
 
-    let app = App::new();
+    let app = App::new().with_db(db);
     let res = run_app(&mut terminal, app).await;
 
     disable_raw_mode()?;

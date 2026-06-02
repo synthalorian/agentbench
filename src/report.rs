@@ -38,7 +38,7 @@ impl Report {
             "- **Total Tokens:** {}\n",
             self.metrics.total_tokens_input + self.metrics.total_tokens_output
         ));
-        md.push_str("\n");
+        md.push('\n');
 
         md.push_str("## Results\n\n");
         md.push_str("| Task | Status | Score | Latency | Input | Output |\n");

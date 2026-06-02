@@ -13,6 +13,12 @@ pub struct SWEBenchSuite {
     tasks: Vec<BenchmarkTask>,
 }
 
+impl Default for SWEBenchSuite {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl SWEBenchSuite {
     pub fn new() -> Self {
         Self { tasks: vec![] }

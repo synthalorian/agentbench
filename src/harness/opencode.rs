@@ -11,6 +11,12 @@ pub struct OpenCodeHarness {
     client: Client,
 }
 
+impl Default for OpenCodeHarness {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl OpenCodeHarness {
     pub fn new() -> Self {
         Self {

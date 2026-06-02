@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use clap::Parser;
 use std::sync::Arc;
 
@@ -16,8 +18,7 @@ mod web;
 use crate::benchmark::{
     livecodebench::LiveCodeBenchSuite,
     swe_bench::SWEBenchSuite,
-    terminal_bench::TerminalBenchSuite,
-    BenchmarkRegistry, BenchmarkRunConfig, BenchmarkSuite,
+    terminal_bench::TerminalBenchSuite, BenchmarkRunConfig, BenchmarkSuite,
 };
 use crate::cli::{Cli, Commands};
 use crate::config::BenchmarkConfig;
@@ -28,7 +29,7 @@ use crate::harness::{
     generic::GenericOpenAIHarness,
     hermes::HermesHarness,
     openshark::OpenSharkHarness,
-    HarnessAdapter, HarnessAdapterConfig, HarnessRegistry,
+    HarnessAdapter, HarnessAdapterConfig,
 };
 use crate::runner::Runner;
 
@@ -86,7 +87,7 @@ async fn main() -> anyhow::Result<()> {
             let harness_arc: Arc<dyn HarnessAdapter> = harness_adapter.into();
 
             // Build benchmark suite
-            let mut suite_box: Box<dyn BenchmarkSuite> = match bench_config.benchmark_type.as_str() {
+            let suite_box: Box<dyn BenchmarkSuite> = match bench_config.benchmark_type.as_str() {
                 "swe_bench" => {
                     let mut s = SWEBenchSuite::new();
                     s.load_tasks(&bench_config.dataset).await?;
@@ -169,11 +170,73 @@ async fn main() -> anyhow::Result<()> {
             web::serve(db, port).await?;
         }
         Commands::Report {
-            run_id: _,
+            run_id,
             format: _,
-            output: _,
+            output,
         } => {
-            println!("Report generation not yet implemented.");
+            let db = Arc::new(Database::new("agentbench.db")?);
+            let runs = db.get_runs(1000)?;
+            let run = runs.iter().find(|r| r.id == run_id).ok_or_else(|| {
+                anyhow::anyhow!(
+                    "Run '{}' not found. Use 'agentbench list' to see available runs.",
+                    run_id
+                )
+            })?;
+
+            let results = db.get_results(&run_id)?;
+
+            let total_tasks = results.len();
+            let passed_tasks = results.iter().filter(|r| r.passed).count();
+            let pass_rate = if total_tasks > 0 {
+                passed_tasks as f64 / total_tasks as f64
+            } else {
+                0.0
+            };
+            let avg_latency = if total_tasks > 0 {
+                results
+                    .iter()
+                    .filter_map(|r| r.latency_ms)
+                    .sum::<i64>() as f64
+                    / total_tasks as f64
+            } else {
+                0.0
+            };
+            let total_input: i64 = results.iter().filter_map(|r| r.tokens_input).sum();
+            let total_output: i64 = results.iter().filter_map(|r| r.tokens_output).sum();
+
+            let report = format!(
+                "# AgentBench Report\n\n**Run ID:** {}\n**Harness:** {}\n**Benchmark:** {}\n**Status:** {}\n\n## Summary\n\n- **Total Tasks:** {}\n- **Passed:** {}\n- **Failed:** {}\n- **Pass Rate:** {:.1}%\n- **Avg Latency:** {:.0}ms\n- **Total Tokens:** {} ({} in / {} out)\n\n## Results\n\n| Task | Status | Score | Latency | Tokens |\n|------|--------|-------|---------|--------|\n",
+                run.id,
+                run.harness_name,
+                run.benchmark_name,
+                run.status,
+                total_tasks,
+                passed_tasks,
+                total_tasks - passed_tasks,
+                pass_rate * 100.0,
+                avg_latency,
+                total_input + total_output,
+                total_input,
+                total_output
+            );
+
+            let mut report = report;
+            for r in &results {
+                let status = if r.passed { "PASS" } else { "FAIL" };
+                let latency = r.latency_ms.map(|l| l.to_string()).unwrap_or_else(|| "-".to_string());
+                let tokens = r.tokens_input.unwrap_or(0) + r.tokens_output.unwrap_or(0);
+                report.push_str(&format!(
+                    "| {} | {} | {:.2} | {}ms | {} |\n",
+                    r.task_id, status, r.score, latency, tokens
+                ));
+            }
+
+            if let Some(out_path) = output {
+                std::fs::write(&out_path, &report)?;
+                println!("Report written to {}", out_path);
+            } else {
+                println!("{}", report);
+            }
         }
     }
 

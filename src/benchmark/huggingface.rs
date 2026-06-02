@@ -22,7 +22,7 @@ pub async fn load_dataset(
         .get(&url)
         .send()
         .await
-        .map_err(|e| BenchError::Http(e))?;
+        .map_err(BenchError::Http)?;
 
     if !response.status().is_success() {
         let text = response.text().await.unwrap_or_default();

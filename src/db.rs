@@ -18,6 +18,15 @@ impl Database {
         Ok(db)
     }
 
+    pub fn open_in_memory() -> BenchResult<Self> {
+        let conn = Connection::open_in_memory()?;
+        let db = Self {
+            conn: Mutex::new(conn),
+        };
+        db.init_schema()?;
+        Ok(db)
+    }
+
     pub fn init_schema(&self) -> BenchResult<()> {
         let conn = self.conn.lock().unwrap();
         conn.execute_batch(
@@ -135,6 +144,53 @@ impl Database {
         }
         Ok(runs)
     }
+
+    pub fn get_results(
+        &self,
+        run_id: &str,
+    ) -> BenchResult<Vec<DbResult>> {
+        let conn = self.conn.lock().unwrap();
+        let mut stmt = conn.prepare(
+            "SELECT task_id, passed, score, latency_ms, tokens_input, tokens_output, output, patch, error, started_at, finished_at FROM results WHERE run_id = ?1 ORDER BY task_id"
+        )?;
+
+        let rows = stmt.query_map(params![run_id], |row| {
+            Ok(DbResult {
+                task_id: row.get(0)?,
+                passed: row.get(1)?,
+                score: row.get(2)?,
+                latency_ms: row.get(3)?,
+                tokens_input: row.get(4)?,
+                tokens_output: row.get(5)?,
+                output: row.get(6)?,
+                patch: row.get(7)?,
+                error: row.get(8)?,
+                started_at: row.get(9)?,
+                finished_at: row.get(10)?,
+            })
+        })?;
+
+        let mut results = vec![];
+        for row in rows {
+            results.push(row?);
+        }
+        Ok(results)
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct DbResult {
+    pub task_id: String,
+    pub passed: bool,
+    pub score: f64,
+    pub latency_ms: Option<i64>,
+    pub tokens_input: Option<i64>,
+    pub tokens_output: Option<i64>,
+    pub output: Option<String>,
+    pub patch: Option<String>,
+    pub error: Option<String>,
+    pub started_at: Option<String>,
+    pub finished_at: Option<String>,
 }
 
 #[derive(Debug, Clone)]

@@ -56,8 +56,6 @@ impl Runner {
             let harness = harness.clone();
             let harness_name = config.harness_name.clone();
             let benchmark_name = suite.name().to_string();
-            let timeout_secs = timeout_secs;
-            let retries = retries;
 
             let handle = tokio::spawn(async move {
                 let _permit = permit;

@@ -1,0 +1,32 @@
+[
+  {
+    "id": "terminal-1",
+    "prompt": "List all files in the current directory and count them.",
+    "expected_output": "5",
+    "timeout_secs": 10
+  },
+  {
+    "id": "terminal-2",
+    "prompt": "Find all Python files recursively and count them.",
+    "expected_output": "3",
+    "timeout_secs": 15
+  },
+  {
+    "id": "terminal-3",
+    "prompt": "Get the current git branch name.",
+    "expected_output": "main",
+    "timeout_secs": 5
+  },
+  {
+    "id": "terminal-4",
+    "prompt": "Check disk usage of the current directory in human-readable format.",
+    "expected_output": "K",
+    "timeout_secs": 10
+  },
+  {
+    "id": "terminal-5",
+    "prompt": "Count lines of code in all Rust files.",
+    "expected_output": "loc",
+    "timeout_secs": 15
+  }
+]

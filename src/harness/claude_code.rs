@@ -3,12 +3,18 @@ use std::collections::HashMap;
 use std::process::Stdio;
 use tokio::process::Command;
 
-use super::{HarnessAdapter, HarnessAdapterConfig, Task, TaskResponse, ToolCall};
+use super::{HarnessAdapter, HarnessAdapterConfig, Task, TaskResponse};
 use crate::error::{BenchError, BenchResult};
 
 pub struct ClaudeCodeHarness {
     config: Option<HarnessAdapterConfig>,
     workspace_dir: Option<String>,
+}
+
+impl Default for ClaudeCodeHarness {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl ClaudeCodeHarness {

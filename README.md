@@ -1,10 +1,10 @@
-# 🎹🦈 AgentBench
+# AgentBench
 
 Open-source, self-hostable benchmark runner for AI coding agents.
 
 ## Features
 
-- **Pluggable Harnesses** — Benchmark any agent: OpenShark, Hermes, Claude Code, Codex, or generic OpenAI-compatible APIs
+- **Pluggable Harnesses** — Benchmark any agent: OpenShark, Hermes, Claude Code, Codex, OpenCode, or generic OpenAI-compatible APIs
 - **Benchmark Suites** — SWE-bench, Terminal-bench, LiveCodeBench (extensible)
 - **Concurrent Execution** — Semaphore-based parallelism with timeouts and retries
 - **Persistent Results** — SQLite store with queryable history
@@ -22,36 +22,108 @@ cd agentbench
 # Build
 cargo build --release
 
-# Run a benchmark
-cargo run -- run --config benches/swe-bench-lite.yml --harness generic
-
 # List available harnesses and benchmarks
-cargo run -- list
+./target/release/agentbench list
+
+# Run the sample benchmark (uses local sample data, no API needed)
+./target/release/agentbench run \
+  --config benches/sample-benchmark.yml \
+  --harness generic
 
 # Start TUI dashboard
-cargo run -- tui
+./target/release/agentbench tui
 
 # Start web dashboard
-cargo run -- web --port 8910
+./target/release/agentbench web --port 8910
+
+# Generate a report from a previous run
+./target/release/agentbench report <run-id>
 ```
 
 ## Configuration
 
-Benchmark suites are defined in YAML:
+Benchmark suites are defined in YAML. See `benches/sample-benchmark.yml`:
 
 ```yaml
-name: "SWE-bench Lite"
+name: "AgentBench Sample"
+description: "Sample benchmark for testing AgentBench with local data"
 benchmark_type: "swe_bench"
+
 dataset:
   source: "local"
-  path: "./data/swe-bench-lite.json"
+  path: "./data/swe-bench-sample.json"
+
 harness:
+  name: "generic-openai"
   adapter: "generic"
   endpoint: "http://localhost:8080/v1"
   model: "local-model"
+  extra:
+    max_tokens: 4096
+    temperature: 0.0
+
 runner:
-  max_workers: 4
-  timeout_secs: 300
+  max_workers: 2
+  timeout_secs: 60
+  retries: 0
+
+scoring:
+  metric: "pass_rate"
+  thresholds:
+    excellent: 0.80
+    good: 0.50
+    acceptable: 0.20
+```
+
+### Harness Adapters
+
+| Adapter | Description | Config |
+|---------|-------------|--------|
+| `generic` | OpenAI-compatible API | `endpoint`, `api_key`, `model` |
+| `openshark` | OpenShark harness | `endpoint`, `api_key` |
+| `hermes` | Hermes agent | `endpoint` or CLI path |
+| `claude_code` | Claude Code CLI | workspace directory |
+| `codex` | OpenAI Codex | `api_key` |
+| `opencode` | OpenCode CLI/API | `endpoint`, `api_key` |
+
+### Benchmark Types
+
+| Type | Description | Validation |
+|------|-------------|------------|
+| `swe_bench` | Software engineering tasks | Docker + pytest |
+| `terminal_bench` | Shell command tasks | stdout matching |
+| `livecodebench` | Live coding challenges | Compile + test |
+
+## Running Tests
+
+```bash
+# Run all tests
+cargo test
+
+# Run with output
+cargo test -- --nocapture
+
+# Run a specific test
+cargo test test_swe_bench_load_tasks -- --nocapture
+```
+
+## Project Structure
+
+```
+agentbench/
+├── benches/          # Benchmark config YAML files
+├── data/             # Sample datasets for testing
+├── src/
+│   ├── benchmark/    # Benchmark suite implementations
+│   ├── harness/      # Harness adapters
+│   ├── tui/          # Ratatui dashboard
+│   ├── web/          # Axum web server
+│   ├── config.rs     # YAML config loading
+│   ├── db.rs         # SQLite persistence
+│   ├── runner.rs     # Concurrent task execution
+│   ├── metrics.rs    # Cost tracking
+│   └── report.rs     # Report generation
+└── tests/            # Integration tests
 ```
 
 ## Architecture

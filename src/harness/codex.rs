@@ -3,12 +3,18 @@ use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-use super::{HarnessAdapter, HarnessAdapterConfig, Task, TaskResponse, ToolCall};
+use super::{HarnessAdapter, HarnessAdapterConfig, Task, TaskResponse};
 use crate::error::{BenchError, BenchResult};
 
 pub struct CodexHarness {
     config: Option<HarnessAdapterConfig>,
     client: Client,
+}
+
+impl Default for CodexHarness {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl CodexHarness {
@@ -74,9 +80,7 @@ impl HarnessAdapter for CodexHarness {
             .ok_or_else(|| BenchError::Harness("No Codex endpoint configured".to_string()))?;
 
         let model = config
-            .model
-            .as_ref()
-            .map(|s| s.as_str())
+            .model.as_deref()
             .unwrap_or("codex-latest");
 
         let start = std::time::Instant::now();

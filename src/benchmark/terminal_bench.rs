@@ -12,6 +12,12 @@ pub struct TerminalBenchSuite {
     tasks: Vec<BenchmarkTask>,
 }
 
+impl Default for TerminalBenchSuite {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl TerminalBenchSuite {
     pub fn new() -> Self {
         Self { tasks: vec![] }

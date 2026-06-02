@@ -14,6 +14,12 @@ pub struct OpenSharkHarness {
     process: Option<tokio::process::Child>,
 }
 
+impl Default for OpenSharkHarness {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl OpenSharkHarness {
     pub fn new() -> Self {
         Self {

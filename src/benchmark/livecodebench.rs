@@ -14,6 +14,12 @@ pub struct LiveCodeBenchSuite {
     tasks: Vec<BenchmarkTask>,
 }
 
+impl Default for LiveCodeBenchSuite {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl LiveCodeBenchSuite {
     pub fn new() -> Self {
         Self { tasks: vec![] }
@@ -38,7 +44,7 @@ impl LiveCodeBenchSuite {
             .unwrap_or("python");
 
         // Write the code to a file
-        let (code_file, run_cmd) = match language {
+        let (_code_file, run_cmd) = match language {
             "python" => {
                 let file = temp_path.join("solution.py");
                 fs::write(&file, code).await?;
