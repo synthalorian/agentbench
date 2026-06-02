@@ -1,0 +1,35 @@
+name: "SWE-bench Lite"
+description: "Lightweight SWE-bench subset for rapid agent evaluation"
+benchmark_type: "swe_bench"
+
+dataset:
+  source: "huggingface"
+  path: "princeton-nlp/SWE-bench_Lite"
+  split: "test"
+  subset: null
+  filter: null
+
+harness:
+  name: "generic-openai"
+  adapter: "generic"
+  endpoint: "http://localhost:8080/v1"
+  api_key: null
+  model: "local-model"
+  extra:
+    max_tokens: 4096
+    temperature: 0.0
+
+runner:
+  max_workers: 4
+  timeout_secs: 300
+  retries: 1
+  docker_image: "agentbench/swe-bench:latest"
+  env:
+    PYTHONPATH: "/testbed"
+
+scoring:
+  metric: "pass_rate"
+  thresholds:
+    excellent: 0.50
+    good: 0.30
+    acceptable: 0.15

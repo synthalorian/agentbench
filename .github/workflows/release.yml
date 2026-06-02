@@ -1,0 +1,56 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        target:
+          - x86_64-unknown-linux-gnu
+          - x86_64-apple-darwin
+          - aarch64-apple-darwin
+          - x86_64-pc-windows-msvc
+    runs-on: ${{ matrix.target == 'x86_64-apple-darwin' && 'macos-latest' || matrix.target == 'aarch64-apple-darwin' && 'macos-latest' || matrix.target == 'x86_64-pc-windows-msvc' && 'windows-latest' || 'ubuntu-latest' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo build --release --target ${{ matrix.target }}
+      - name: Package
+        shell: bash
+        run: |
+          cd target/${{ matrix.target }}/release
+          if [[ "${{ matrix.target }}" == *windows* ]]; then
+            7z a ../../../agentbench-${{ matrix.target }}.zip agentbench.exe
+          else
+            tar czvf ../../../agentbench-${{ matrix.target }}.tar.gz agentbench
+          fi
+          cd -
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: agentbench-${{ matrix.target }}
+          path: agentbench-${{ matrix.target }}.*
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/**/*
+          generate_release_notes: true
