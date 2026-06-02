@@ -5,6 +5,7 @@ use std::collections::HashMap;
 use crate::error::BenchResult;
 use crate::harness::TaskResponse;
 
+pub mod huggingface;
 pub mod livecodebench;
 pub mod swe_bench;
 pub mod terminal_bench;

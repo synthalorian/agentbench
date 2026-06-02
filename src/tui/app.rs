@@ -1,9 +1,13 @@
-use crate::db::RunSummary;
+use crate::db::{Database, RunSummary};
+use std::sync::Arc;
 
 pub struct App {
     pub runs: Vec<RunSummary>,
     pub selected: usize,
     pub should_quit: bool,
+    pub db: Option<Arc<Database>>,
+    pub loading: bool,
+    pub error: Option<String>,
 }
 
 impl App {
@@ -12,11 +16,34 @@ impl App {
             runs: vec![],
             selected: 0,
             should_quit: false,
+            db: None,
+            loading: false,
+            error: None,
         }
     }
 
+    pub fn with_db(mut self, db: Arc<Database>) -> Self {
+        self.db = Some(db);
+        self
+    }
+
     pub fn refresh(&mut self) {
-        // TODO: Load from database
+        if let Some(db) = &self.db {
+            self.loading = true;
+            self.error = None;
+            match db.get_runs(100) {
+                Ok(runs) => {
+                    self.runs = runs;
+                    if self.selected >= self.runs.len() && !self.runs.is_empty() {
+                        self.selected = self.runs.len() - 1;
+                    }
+                }
+                Err(e) => {
+                    self.error = Some(format!("Failed to load runs: {}", e));
+                }
+            }
+            self.loading = false;
+        }
     }
 
     pub fn previous(&mut self) {
@@ -32,6 +59,11 @@ impl App {
     }
 
     pub fn on_tick(&mut self) {
-        // TODO: Poll for updates
+        // Poll for updates every tick
+        self.refresh();
+    }
+
+    pub fn selected_run(&self) -> Option<&RunSummary> {
+        self.runs.get(self.selected)
     }
 }
