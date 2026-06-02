@@ -49,7 +49,7 @@ async fn main() -> anyhow::Result<()> {
                 "claude_code".to_string(),
                 Box::new(ClaudeCodeHarness::new()),
             );
-            harness_registry.register("codex".to_string(), Box::new(CodexHarness::new()));
+            harness_registry.register("opencode".to_string(), Box::new(crate::harness::opencode::OpenCodeHarness::new()));
 
             let mut benchmark_registry = BenchmarkRegistry::new();
             benchmark_registry.register("swe_bench".to_string(), Box::new(SWEBenchSuite::new()));
@@ -104,6 +104,18 @@ async fn main() -> anyhow::Result<()> {
                 }
                 "codex" => {
                     let mut h = CodexHarness::new();
+                    h.init(HarnessAdapterConfig {
+                        name: harness.clone(),
+                        endpoint: bench_config.harness.endpoint.clone(),
+                        api_key: bench_config.harness.api_key.clone(),
+                        model: bench_config.harness.model.clone(),
+                        extra: bench_config.harness.extra.clone().unwrap_or_default(),
+                    })
+                    .await?;
+                    GenericOpenAIHarness::new()
+                }
+                "opencode" => {
+                    let mut h = crate::harness::opencode::OpenCodeHarness::new();
                     h.init(HarnessAdapterConfig {
                         name: harness.clone(),
                         endpoint: bench_config.harness.endpoint.clone(),
@@ -199,7 +211,7 @@ async fn main() -> anyhow::Result<()> {
             }
         }
         Commands::List => {
-            println!("Available harnesses: generic, openshark, hermes, claude_code, codex");
+            println!("Available harnesses: generic, openshark, hermes, claude_code, codex, opencode");
             println!("Available benchmarks: swe_bench, terminal_bench, livecodebench");
         }
         Commands::Tui => {

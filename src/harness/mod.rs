@@ -8,6 +8,7 @@ pub mod claude_code;
 pub mod codex;
 pub mod generic;
 pub mod hermes;
+pub mod opencode;
 pub mod openshark;
 
 /// A single task given to a harness
