@@ -1,0 +1,29 @@
+name: "TerminalBench Sample"
+description: "Sample terminal command benchmark for testing"
+benchmark_type: "terminal_bench"
+
+dataset:
+  source: "local"
+  path: "./data/terminal-bench-sample.json"
+
+harness:
+  name: "generic-openai"
+  adapter: "generic"
+  endpoint: "http://localhost:8080/v1"
+  api_key: null
+  model: "local-model"
+  extra:
+    max_tokens: 4096
+    temperature: 0.0
+
+runner:
+  max_workers: 2
+  timeout_secs: 15
+  retries: 0
+
+scoring:
+  metric: "pass_rate"
+  thresholds:
+    excellent: 0.80
+    good: 0.50
+    acceptable: 0.20

@@ -1,37 +1,16 @@
 [
   {
-    "id": "lc-1",
-    "problem": "Write a function that reverses a string without using built-in reverse methods.",
+    "id": "lc-001",
+    "problem": "Write a Python function `sum_two(a, b)` that returns the sum of two integers.",
+    "test_code": "from solution import sum_two\n\ndef test_sum_two():\n    assert sum_two(1, 2) == 3\n    assert sum_two(-1, 1) == 0\n    assert sum_two(0, 0) == 0\n",
     "language": "python",
-    "test_code": "def test_reverse_string():\n    assert reverse_string('hello') == 'olleh'\n    assert reverse_string('Python') == 'nohtyP'\n    assert reverse_string('') == ''\n    assert reverse_string('a') == 'a'\n",
     "timeout_secs": 30
   },
   {
-    "id": "lc-2",
-    "problem": "Write a function that checks if a number is prime.",
+    "id": "lc-002",
+    "problem": "Write a Python function `is_palindrome(s)` that returns True if string s is a palindrome.",
+    "test_code": "from solution import is_palindrome\n\ndef test_is_palindrome():\n    assert is_palindrome('racecar') == True\n    assert is_palindrome('hello') == False\n    assert is_palindrome('') == True\n",
     "language": "python",
-    "test_code": "def test_is_prime():\n    assert is_prime(2) == True\n    assert is_prime(3) == True\n    assert is_prime(4) == False\n    assert is_prime(17) == True\n    assert is_prime(1) == False\n",
-    "timeout_secs": 30
-  },
-  {
-    "id": "lc-3",
-    "problem": "Write a function that finds the maximum element in a list.",
-    "language": "python",
-    "test_code": "def test_find_max():\n    assert find_max([1, 5, 3, 9, 2]) == 9\n    assert find_max([-1, -5, -3]) == -1\n    assert find_max([42]) == 42\n",
-    "timeout_secs": 30
-  },
-  {
-    "id": "lc-4",
-    "problem": "Write a function that calculates the factorial of a number.",
-    "language": "python",
-    "test_code": "def test_factorial():\n    assert factorial(0) == 1\n    assert factorial(1) == 1\n    assert factorial(5) == 120\n    assert factorial(10) == 3628800\n",
-    "timeout_secs": 30
-  },
-  {
-    "id": "lc-5",
-    "problem": "Write a function that checks if a string is a palindrome.",
-    "language": "python",
-    "test_code": "def test_is_palindrome():\n    assert is_palindrome('racecar') == True\n    assert is_palindrome('hello') == False\n    assert is_palindrome('A man a plan a canal Panama'.replace(' ', '').lower()) == True\n    assert is_palindrome('') == True\n",
     "timeout_secs": 30
   }
 ]

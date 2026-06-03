@@ -6,6 +6,7 @@ use crate::benchmark::{BenchmarkResult, BenchmarkRunConfig, BenchmarkSuite};
 use crate::db::Database;
 use crate::error::{BenchError, BenchResult};
 use crate::harness::{HarnessAdapter, Task as HarnessTask, TaskResponse};
+use crate::metrics::BudgetTracker;
 
 pub struct Runner {
     db: Arc<Database>,
@@ -37,6 +38,9 @@ impl Runner {
         let semaphore = Arc::new(Semaphore::new(max_workers));
         let timeout_secs = bench_config.runner.timeout_secs;
         let retries = bench_config.runner.retries;
+
+        // Budget tracking (optional — no budget config means no limit)
+        let mut budget_tracker: Option<BudgetTracker> = None;
 
         // Phase 1: Execute tasks concurrently to get responses
         let (tx, mut rx) = mpsc::channel::<(String, BenchResult<TaskResponse>)>(max_workers);
@@ -81,18 +85,18 @@ impl Runner {
         let mut results = vec![];
         while let Some((task_id, response_result)) = rx.recv().await {
             let result = match response_result {
-     Ok(response) => {
-         // Find the task to validate against
-         match tasks_to_run.iter().find(|t| t.id == task_id) {
-             Some(task) => suite.validate(task, &response).await,
-             None => Err(BenchError::TaskExecution(format!(
-                 "Task {} not found for validation",
-                 task_id
-             ))),
-         }
-     }
-     Err(e) => Ok(BenchmarkResult {
-         task_id: task_id.clone(),
+                Ok(response) => {
+                    // Find the task to validate against
+                    match tasks_to_run.iter().find(|t| t.id == task_id) {
+                        Some(task) => suite.validate(task, &response).await,
+                        None => Err(BenchError::TaskExecution(format!(
+                            "Task {} not found for validation",
+                            task_id
+                        ))),
+                    }
+                }
+                Err(e) => Ok(BenchmarkResult {
+                    task_id: task_id.clone(),
                     harness_name: config.harness_name.clone(),
                     benchmark_name: suite.name().to_string(),
                     passed: false,
@@ -115,7 +119,24 @@ impl Runner {
             };
 
             match result {
-                Ok(r) => {
+                Ok(mut r) => {
+                    // Ensure harness_name matches the actual harness used
+                    r.harness_name = config.harness_name.clone();
+                    // Track cost if budget is configured
+                    if let Some(ref mut tracker) = budget_tracker {
+                        let model = r
+                            .response
+                            .metadata
+                            .get("model")
+                            .map(|s| s.as_str())
+                            .unwrap_or("");
+                        let cost = crate::metrics::get_cost_model(model)
+                            .map(|cm| {
+                                cm.estimate(r.response.tokens_input, r.response.tokens_output)
+                            })
+                            .unwrap_or(0.0);
+                        tracker.add_cost(cost);
+                    }
                     self.db.save_result(&run_id, &r)?;
                     results.push(r);
                 }
@@ -155,6 +176,13 @@ impl Runner {
         let aggregate = suite.aggregate_score(&results);
         self.db
             .finish_run(&run_id, finished_at, aggregate, results.len())?;
+
+        // Log budget alerts if any
+        if let Some(tracker) = budget_tracker {
+            for alert in &tracker.alerts {
+                tracing::warn!("{}", alert);
+            }
+        }
 
         Ok(results)
     }

@@ -25,6 +25,9 @@ pub enum Commands {
         /// Dry-run mode — use mock harness, no external API calls
         #[arg(long)]
         dry_run: bool,
+        /// Maximum number of tasks to run (for quick testing)
+        #[arg(short, long)]
+        max_tasks: Option<usize>,
     },
     /// Start the TUI dashboard
     Tui,

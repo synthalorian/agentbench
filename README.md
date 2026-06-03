@@ -36,6 +36,25 @@ cargo build --release
   --harness generic \
   --dry-run
 
+# Limit to first 2 tasks (quick smoke test)
+./target/release/agentbench run \
+  --config benches/sample-benchmark.yml \
+  --harness generic \
+  --dry-run \
+  --max-tasks 2
+
+# Run terminal-bench sample
+./target/release/agentbench run \
+  --config benches/terminal-bench-sample.yml \
+  --harness generic \
+  --dry-run
+
+# Run livecodebench sample
+./target/release/agentbench run \
+  --config benches/livecodebench-sample.yml \
+  --harness generic \
+  --dry-run
+
 # Start TUI dashboard
 ./target/release/agentbench tui
 

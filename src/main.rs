@@ -44,6 +44,7 @@ async fn main() -> anyhow::Result<()> {
             harness,
             output,
             dry_run,
+            max_tasks,
         } => {
             let bench_config = BenchmarkConfig::from_file(&config)?;
             let db = Arc::new(Database::new("agentbench.db")?);
@@ -119,7 +120,7 @@ async fn main() -> anyhow::Result<()> {
 
             let run_config = BenchmarkRunConfig {
                 harness_name: harness.clone(),
-                max_tasks: None,
+                max_tasks,
                 shuffle: false,
                 seed: None,
             };
