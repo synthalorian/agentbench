@@ -5,7 +5,7 @@ use tokio::time::{timeout, Duration};
 use crate::benchmark::{BenchmarkResult, BenchmarkRunConfig, BenchmarkSuite};
 use crate::db::Database;
 use crate::error::{BenchError, BenchResult};
-use crate::harness::{HarnessAdapter, Task as HarnessTask};
+use crate::harness::{HarnessAdapter, Task as HarnessTask, TaskResponse};
 
 pub struct Runner {
     db: Arc<Database>,
@@ -38,10 +38,11 @@ impl Runner {
         let timeout_secs = bench_config.runner.timeout_secs;
         let retries = bench_config.runner.retries;
 
-        let (tx, mut rx) = mpsc::channel::<BenchmarkResult>(max_workers);
+        // Phase 1: Execute tasks concurrently to get responses
+        let (tx, mut rx) = mpsc::channel::<(String, BenchResult<TaskResponse>)>(max_workers);
         let mut handles = vec![];
 
-        for task in tasks_to_run {
+        for task in tasks_to_run.iter() {
             let permit = semaphore.clone().acquire_owned().await.unwrap();
             let tx = tx.clone();
             let task = task.clone();
@@ -55,52 +56,20 @@ impl Runner {
             };
             let harness = harness.clone();
             let harness_name = config.harness_name.clone();
-            let benchmark_name = suite.name().to_string();
 
             let handle = tokio::spawn(async move {
-                let _permit = permit;
-
                 let result = Self::execute_with_retry(
                     harness.as_ref(),
                     &harness_task,
                     &task,
-                    &benchmark_name,
                     &harness_name,
                     timeout_secs,
                     retries,
                 )
                 .await;
 
-                match result {
-                    Ok(r) => {
-                        let _ = tx.send(r).await;
-                    }
-                    Err(e) => {
-                        let _ = tx
-                            .send(BenchmarkResult {
-                                task_id: task.id.clone(),
-                                harness_name: harness_name.clone(),
-                                benchmark_name: benchmark_name.clone(),
-                                passed: false,
-                                score: 0.0,
-                                response: crate::harness::TaskResponse {
-                                    task_id: task.id.clone(),
-                                    output: String::new(),
-                                    patch: None,
-                                    tool_calls: vec![],
-                                    metadata: Default::default(),
-                                    latency_ms: 0,
-                                    tokens_input: 0,
-                                    tokens_output: 0,
-                                },
-                                validation_output: None,
-                                error: Some(e.to_string()),
-                                started_at: chrono::Utc::now(),
-                                finished_at: chrono::Utc::now(),
-                            })
-                            .await;
-                    }
-                }
+                drop(permit);
+                let _ = tx.send((task.id.clone(), result)).await;
             });
 
             handles.push(handle);
@@ -108,10 +77,74 @@ impl Runner {
 
         drop(tx);
 
+        // Phase 2: Collect responses and validate serially (suite.validate is &self)
         let mut results = vec![];
-        while let Some(result) = rx.recv().await {
-            self.db.save_result(&run_id, &result)?;
-            results.push(result);
+        while let Some((task_id, response_result)) = rx.recv().await {
+            let result = match response_result {
+     Ok(response) => {
+         // Find the task to validate against
+         match tasks_to_run.iter().find(|t| t.id == task_id) {
+             Some(task) => suite.validate(task, &response).await,
+             None => Err(BenchError::TaskExecution(format!(
+                 "Task {} not found for validation",
+                 task_id
+             ))),
+         }
+     }
+     Err(e) => Ok(BenchmarkResult {
+         task_id: task_id.clone(),
+                    harness_name: config.harness_name.clone(),
+                    benchmark_name: suite.name().to_string(),
+                    passed: false,
+                    score: 0.0,
+                    response: TaskResponse {
+                        task_id: String::new(),
+                        output: String::new(),
+                        patch: None,
+                        tool_calls: vec![],
+                        metadata: Default::default(),
+                        latency_ms: 0,
+                        tokens_input: 0,
+                        tokens_output: 0,
+                    },
+                    validation_output: None,
+                    error: Some(e.to_string()),
+                    started_at: chrono::Utc::now(),
+                    finished_at: chrono::Utc::now(),
+                }),
+            };
+
+            match result {
+                Ok(r) => {
+                    self.db.save_result(&run_id, &r)?;
+                    results.push(r);
+                }
+                Err(e) => {
+                    let fallback = BenchmarkResult {
+                        task_id,
+                        harness_name: config.harness_name.clone(),
+                        benchmark_name: suite.name().to_string(),
+                        passed: false,
+                        score: 0.0,
+                        response: TaskResponse {
+                            task_id: String::new(),
+                            output: String::new(),
+                            patch: None,
+                            tool_calls: vec![],
+                            metadata: Default::default(),
+                            latency_ms: 0,
+                            tokens_input: 0,
+                            tokens_output: 0,
+                        },
+                        validation_output: None,
+                        error: Some(e.to_string()),
+                        started_at: chrono::Utc::now(),
+                        finished_at: chrono::Utc::now(),
+                    };
+                    self.db.save_result(&run_id, &fallback)?;
+                    results.push(fallback);
+                }
+            }
         }
 
         for h in handles {
@@ -129,17 +162,14 @@ impl Runner {
     async fn execute_with_retry(
         harness: &dyn HarnessAdapter,
         harness_task: &HarnessTask,
-        benchmark_task: &crate::benchmark::BenchmarkTask,
-        benchmark_name: &str,
-        harness_name: &str,
+        _benchmark_task: &crate::benchmark::BenchmarkTask,
+        _harness_name: &str,
         timeout_secs: u64,
         retries: u32,
-    ) -> BenchResult<BenchmarkResult> {
+    ) -> BenchResult<TaskResponse> {
         let mut last_error = None;
 
         for _attempt in 0..=retries {
-            let started_at = chrono::Utc::now();
-
             let result = timeout(
                 Duration::from_secs(timeout_secs),
                 harness.execute_task(harness_task),
@@ -148,21 +178,7 @@ impl Runner {
 
             match result {
                 Ok(Ok(response)) => {
-                    let passed = !response.output.is_empty();
-                    let finished_at = chrono::Utc::now();
-
-                    return Ok(BenchmarkResult {
-                        task_id: benchmark_task.id.clone(),
-                        harness_name: harness_name.to_string(),
-                        benchmark_name: benchmark_name.to_string(),
-                        passed,
-                        score: if passed { 1.0 } else { 0.0 },
-                        response,
-                        validation_output: None,
-                        error: None,
-                        started_at,
-                        finished_at,
-                    });
+                    return Ok(response);
                 }
                 Ok(Err(e)) => {
                     last_error = Some(e);

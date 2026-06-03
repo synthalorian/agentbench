@@ -22,6 +22,9 @@ pub enum Commands {
         /// Output format: table, json, markdown
         #[arg(short, long, default_value = "table")]
         output: String,
+        /// Dry-run mode — use mock harness, no external API calls
+        #[arg(long)]
+        dry_run: bool,
     },
     /// Start the TUI dashboard
     Tui,

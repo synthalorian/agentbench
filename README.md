@@ -30,6 +30,12 @@ cargo build --release
   --config benches/sample-benchmark.yml \
   --harness generic
 
+# Dry-run mode — test without any external API calls
+./target/release/agentbench run \
+  --config benches/sample-benchmark.yml \
+  --harness generic \
+  --dry-run
+
 # Start TUI dashboard
 ./target/release/agentbench tui
 
@@ -80,6 +86,7 @@ scoring:
 | Adapter | Description | Config |
 |---------|-------------|--------|
 | `generic` | OpenAI-compatible API | `endpoint`, `api_key`, `model` |
+| `mock` | Dry-run / testing | No config needed |
 | `openshark` | OpenShark harness | `endpoint`, `api_key` |
 | `hermes` | Hermes agent | `endpoint` or CLI path |
 | `claude_code` | Claude Code CLI | workspace directory |

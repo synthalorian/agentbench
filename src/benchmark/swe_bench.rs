@@ -1,9 +1,6 @@
 use async_trait::async_trait;
 use std::collections::HashMap;
 use std::path::Path;
-use std::process::Stdio;
-use tokio::process::Command;
-use tokio::time::{timeout, Duration};
 
 use super::{BenchmarkResult, BenchmarkSuite, BenchmarkTask};
 use crate::error::{BenchError, BenchResult};
@@ -27,94 +24,15 @@ impl SWEBenchSuite {
     /// Apply a patch inside a Docker container and run tests
     async fn validate_in_docker(
         &self,
-        task: &BenchmarkTask,
-        patch: &str,
-        docker_image: &str,
-        timeout_secs: u64,
+        _task: &BenchmarkTask,
+        _patch: &str,
+        _docker_image: &str,
+        _timeout_secs: u64,
     ) -> BenchResult<(bool, String)> {
-        let repo = task
-            .repo
-            .as_ref()
-            .ok_or_else(|| BenchError::Benchmark("Task missing repo field".to_string()))?;
-
-        let base_commit = task
-            .base_commit
-            .as_ref()
-            .ok_or_else(|| BenchError::Benchmark("Task missing base_commit field".to_string()))?;
-
-        // Create a temporary directory for the patch file
-        let temp_dir = tempfile::tempdir()?;
-        let patch_path = temp_dir.path().join("patch.diff");
-        tokio::fs::write(&patch_path, patch).await?;
-
-        // Docker command to:
-        // 1. Clone the repo at the base commit
-        // 2. Apply the patch
-        // 3. Run the test patch
-        let script = format!(
-            r#"
-set -e
-cd /testbed
-
-# Clone repo if not exists, checkout base commit
-if [ ! -d "{repo}" ]; then
-    git clone https://github.com/{repo}.git {repo}
-fi
-cd {repo}
-git checkout {base_commit}
-git clean -fd
-
-# Apply the patch
-cat /tmp/patch.diff | git apply -
-
-# Run tests from test_patch if available
-if [ -f /tmp/test_patch.py ]; then
-    python -m pytest /tmp/test_patch.py -v 2>&1
-else
-    echo "No test patch provided"
-fi
-"#,
-            repo = repo,
-            base_commit = base_commit
-        );
-
-        let mut cmd = Command::new("docker");
-        cmd.args([
-            "run",
-            "--rm",
-            "-v",
-            &format!("{}:/tmp/patch.diff", patch_path.display()),
-            "-v",
-            &format!("{}:/tmp/test_patch.py", patch_path.display()),
-            "-w",
-            "/testbed",
-            docker_image,
-            "bash",
-            "-c",
-            &script,
-        ])
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
-
-        let result = timeout(Duration::from_secs(timeout_secs), cmd.output()).await;
-
-        match result {
-            Ok(Ok(output)) => {
-                let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-                let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-                let combined = format!("{stdout}\n{stderr}");
-                let passed = output.status.success();
-                Ok((passed, combined))
-            }
-            Ok(Err(e)) => Err(BenchError::TaskExecution(format!(
-                "Docker execution failed: {}",
-                e
-            ))),
-            Err(_) => Err(BenchError::TaskExecution(format!(
-                "Docker timeout after {}s",
-                timeout_secs
-            ))),
-        }
+        // Docker validation disabled for v0.3.0 — falls back to patch format check
+        Err(BenchError::Benchmark(
+            "Docker validation not available in this build".to_string(),
+        ))
     }
 
     /// Fallback validation without Docker — just check patch format

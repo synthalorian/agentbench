@@ -43,44 +43,50 @@ async fn main() -> anyhow::Result<()> {
             config,
             harness,
             output,
+            dry_run,
         } => {
             let bench_config = BenchmarkConfig::from_file(&config)?;
             let db = Arc::new(Database::new("agentbench.db")?);
 
-            // Build harness
-            let harness_adapter: Box<dyn HarnessAdapter> = match harness.as_str() {
-                "generic" => {
-                    let mut h = GenericOpenAIHarness::new();
-                    h.init(build_harness_config(&harness, &bench_config)).await?;
-                    Box::new(h)
-                }
-                "openshark" => {
-                    let mut h = OpenSharkHarness::new();
-                    h.init(build_harness_config(&harness, &bench_config)).await?;
-                    Box::new(h)
-                }
-                "hermes" => {
-                    let mut h = HermesHarness::new();
-                    h.init(build_harness_config(&harness, &bench_config)).await?;
-                    Box::new(h)
-                }
-                "claude_code" => {
-                    let mut h = ClaudeCodeHarness::new();
-                    h.init(build_harness_config(&harness, &bench_config)).await?;
-                    Box::new(h)
-                }
-                "codex" => {
-                    let mut h = CodexHarness::new();
-                    h.init(build_harness_config(&harness, &bench_config)).await?;
-                    Box::new(h)
-                }
-                "opencode" => {
-                    let mut h = crate::harness::opencode::OpenCodeHarness::new();
-                    h.init(build_harness_config(&harness, &bench_config)).await?;
-                    Box::new(h)
-                }
-                _ => {
-                    return Err(anyhow::anyhow!("Unknown harness: {}", harness));
+            let harness_adapter: Box<dyn HarnessAdapter> = if dry_run {
+                let mut h = crate::harness::mock::MockHarness::new();
+                h.init(build_harness_config(&harness, &bench_config)).await?;
+                Box::new(h)
+            } else {
+                match harness.as_str() {
+                    "generic" => {
+                        let mut h = GenericOpenAIHarness::new();
+                        h.init(build_harness_config(&harness, &bench_config)).await?;
+                        Box::new(h)
+                    }
+                    "openshark" => {
+                        let mut h = OpenSharkHarness::new();
+                        h.init(build_harness_config(&harness, &bench_config)).await?;
+                        Box::new(h)
+                    }
+                    "hermes" => {
+                        let mut h = HermesHarness::new();
+                        h.init(build_harness_config(&harness, &bench_config)).await?;
+                        Box::new(h)
+                    }
+                    "claude_code" => {
+                        let mut h = ClaudeCodeHarness::new();
+                        h.init(build_harness_config(&harness, &bench_config)).await?;
+                        Box::new(h)
+                    }
+                    "codex" => {
+                        let mut h = CodexHarness::new();
+                        h.init(build_harness_config(&harness, &bench_config)).await?;
+                        Box::new(h)
+                    }
+                    "opencode" => {
+                        let mut h = crate::harness::opencode::OpenCodeHarness::new();
+                        h.init(build_harness_config(&harness, &bench_config)).await?;
+                        Box::new(h)
+                    }
+                    _ => {
+                        return Err(anyhow::anyhow!("Unknown harness: {}", harness));
+                    }
                 }
             };
 
