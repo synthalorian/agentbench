@@ -79,9 +79,7 @@ impl HarnessAdapter for CodexHarness {
             .as_ref()
             .ok_or_else(|| BenchError::Harness("No Codex endpoint configured".to_string()))?;
 
-        let model = config
-            .model.as_deref()
-            .unwrap_or("codex-latest");
+        let model = config.model.as_deref().unwrap_or("codex-latest");
 
         let start = std::time::Instant::now();
 

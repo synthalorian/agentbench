@@ -175,6 +175,6 @@ agentbench/
 
 ## License
 
-MIT — see [LICENSE](LICENSE)
+Apache-2.0 — see [LICENSE](LICENSE)
 
 Made by synth with synthshark

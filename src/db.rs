@@ -1,5 +1,5 @@
 use rusqlite::{params, Connection};
-use std::sync::Mutex;
+use std::sync::{Mutex, MutexGuard};
 
 use crate::benchmark::BenchmarkResult;
 use crate::error::BenchResult;
@@ -9,6 +9,11 @@ pub struct Database {
 }
 
 impl Database {
+    /// Lock the connection, recovering from mutex poisoning instead of panicking.
+    fn lock(&self) -> MutexGuard<'_, Connection> {
+        self.conn.lock().unwrap_or_else(|e| e.into_inner())
+    }
+
     pub fn new(path: &str) -> BenchResult<Self> {
         let conn = Connection::open(path)?;
         let db = Self {
@@ -28,7 +33,13 @@ impl Database {
     }
 
     pub fn init_schema(&self) -> BenchResult<()> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.lock();
+        // WAL + busy_timeout let the runner and the web/TUI dashboards
+        // (same or separate processes) access the DB file concurrently.
+        // journal_mode=WAL is a no-op for in-memory databases.
+        conn.execute_batch(
+            "PRAGMA journal_mode=WAL; PRAGMA busy_timeout=5000; PRAGMA foreign_keys=ON;",
+        )?;
         conn.execute_batch(
             r#"
             CREATE TABLE IF NOT EXISTS runs (
@@ -74,7 +85,7 @@ impl Database {
         benchmark: &str,
         started_at: chrono::DateTime<chrono::Utc>,
     ) -> BenchResult<()> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.lock();
         conn.execute(
             "INSERT INTO runs (id, harness_name, benchmark_name, started_at, status) VALUES (?1, ?2, ?3, ?4, 'running')",
             params![run_id, harness, benchmark, started_at.to_rfc3339()],
@@ -83,7 +94,7 @@ impl Database {
     }
 
     pub fn save_result(&self, run_id: &str, result: &BenchmarkResult) -> BenchResult<()> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.lock();
         conn.execute(
             "INSERT INTO results (run_id, task_id, passed, score, latency_ms, tokens_input, tokens_output, output, patch, error, started_at, finished_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
             params![
@@ -111,7 +122,7 @@ impl Database {
         aggregate_score: f64,
         tasks_completed: usize,
     ) -> BenchResult<()> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.lock();
         conn.execute(
             "UPDATE runs SET finished_at = ?1, aggregate_score = ?2, tasks_completed = ?3, status = 'completed' WHERE id = ?4",
             params![finished_at.to_rfc3339(), aggregate_score, tasks_completed as i64, run_id],
@@ -120,7 +131,7 @@ impl Database {
     }
 
     pub fn get_runs(&self, limit: usize) -> BenchResult<Vec<RunSummary>> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.lock();
         let mut stmt = conn.prepare(
             "SELECT id, harness_name, benchmark_name, started_at, finished_at, aggregate_score, tasks_completed, status FROM runs ORDER BY started_at DESC LIMIT ?1"
         )?;
@@ -145,11 +156,8 @@ impl Database {
         Ok(runs)
     }
 
-    pub fn get_results(
-        &self,
-        run_id: &str,
-    ) -> BenchResult<Vec<DbResult>> {
-        let conn = self.conn.lock().unwrap();
+    pub fn get_results(&self, run_id: &str) -> BenchResult<Vec<DbResult>> {
+        let conn = self.lock();
         let mut stmt = conn.prepare(
             "SELECT task_id, passed, score, latency_ms, tokens_input, tokens_output, output, patch, error, started_at, finished_at FROM results WHERE run_id = ?1 ORDER BY task_id"
         )?;

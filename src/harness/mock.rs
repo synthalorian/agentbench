@@ -49,7 +49,10 @@ impl HarnessAdapter for MockHarness {
         Ok(TaskResponse {
             task_id: task.id.clone(),
             output,
-            patch: Some(format!("--- a/file.txt\n+++ b/file.txt\n@@ -1 +1 @@\n-mock patch for {}\n", task.id)),
+            patch: Some(format!(
+                "--- a/file.txt\n+++ b/file.txt\n@@ -1 +1 @@\n-mock patch for {}\n",
+                task.id
+            )),
             tool_calls: vec![],
             metadata: HashMap::new(),
             latency_ms: 42,

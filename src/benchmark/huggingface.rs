@@ -18,11 +18,7 @@ pub async fn load_dataset(
     );
 
     let client = reqwest::Client::new();
-    let response = client
-        .get(&url)
-        .send()
-        .await
-        .map_err(BenchError::Http)?;
+    let response = client.get(&url).send().await.map_err(BenchError::Http)?;
 
     if !response.status().is_success() {
         let text = response.text().await.unwrap_or_default();

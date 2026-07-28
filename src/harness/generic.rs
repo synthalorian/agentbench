@@ -88,9 +88,7 @@ impl HarnessAdapter for GenericOpenAIHarness {
             .as_ref()
             .ok_or_else(|| BenchError::Harness("No endpoint configured".to_string()))?;
 
-        let model = config
-            .model.as_deref()
-            .unwrap_or("local-model");
+        let model = config.model.as_deref().unwrap_or("local-model");
 
         let max_tokens = config
             .extra

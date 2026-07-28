@@ -16,20 +16,15 @@ mod tui;
 mod web;
 
 use crate::benchmark::{
-    livecodebench::LiveCodeBenchSuite,
-    swe_bench::SWEBenchSuite,
+    livecodebench::LiveCodeBenchSuite, swe_bench::SWEBenchSuite,
     terminal_bench::TerminalBenchSuite, BenchmarkRunConfig, BenchmarkSuite,
 };
 use crate::cli::{Cli, Commands};
 use crate::config::BenchmarkConfig;
 use crate::db::Database;
 use crate::harness::{
-    claude_code::ClaudeCodeHarness,
-    codex::CodexHarness,
-    generic::GenericOpenAIHarness,
-    hermes::HermesHarness,
-    openshark::OpenSharkHarness,
-    HarnessAdapter, HarnessAdapterConfig,
+    claude_code::ClaudeCodeHarness, codex::CodexHarness, generic::GenericOpenAIHarness,
+    hermes::HermesHarness, openshark::OpenSharkHarness, HarnessAdapter, HarnessAdapterConfig,
 };
 use crate::runner::Runner;
 
@@ -49,44 +44,68 @@ async fn main() -> anyhow::Result<()> {
             let bench_config = BenchmarkConfig::from_file(&config)?;
             let db = Arc::new(Database::new("agentbench.db")?);
 
+            // Harness resolution: --harness flag wins; --dry-run forces mock;
+            // otherwise fall back to the config file's harness.adapter.
+            let harness = match (harness, dry_run) {
+                (Some(h), _) => h,
+                (None, true) => "mock".to_string(),
+                (None, false) => bench_config.harness.adapter.clone(),
+            };
+
             let harness_adapter: Box<dyn HarnessAdapter> = if dry_run {
                 let mut h = crate::harness::mock::MockHarness::new();
-                h.init(build_harness_config(&harness, &bench_config)).await?;
+                h.init(build_harness_config(&harness, &bench_config))
+                    .await?;
                 Box::new(h)
             } else {
                 match harness.as_str() {
                     "generic" => {
                         let mut h = GenericOpenAIHarness::new();
-                        h.init(build_harness_config(&harness, &bench_config)).await?;
+                        h.init(build_harness_config(&harness, &bench_config))
+                            .await?;
+                        Box::new(h)
+                    }
+                    "mock" => {
+                        let mut h = crate::harness::mock::MockHarness::new();
+                        h.init(build_harness_config(&harness, &bench_config))
+                            .await?;
                         Box::new(h)
                     }
                     "openshark" => {
                         let mut h = OpenSharkHarness::new();
-                        h.init(build_harness_config(&harness, &bench_config)).await?;
+                        h.init(build_harness_config(&harness, &bench_config))
+                            .await?;
                         Box::new(h)
                     }
                     "hermes" => {
                         let mut h = HermesHarness::new();
-                        h.init(build_harness_config(&harness, &bench_config)).await?;
+                        h.init(build_harness_config(&harness, &bench_config))
+                            .await?;
                         Box::new(h)
                     }
                     "claude_code" => {
                         let mut h = ClaudeCodeHarness::new();
-                        h.init(build_harness_config(&harness, &bench_config)).await?;
+                        h.init(build_harness_config(&harness, &bench_config))
+                            .await?;
                         Box::new(h)
                     }
                     "codex" => {
                         let mut h = CodexHarness::new();
-                        h.init(build_harness_config(&harness, &bench_config)).await?;
+                        h.init(build_harness_config(&harness, &bench_config))
+                            .await?;
                         Box::new(h)
                     }
                     "opencode" => {
                         let mut h = crate::harness::opencode::OpenCodeHarness::new();
-                        h.init(build_harness_config(&harness, &bench_config)).await?;
+                        h.init(build_harness_config(&harness, &bench_config))
+                            .await?;
                         Box::new(h)
                     }
                     _ => {
-                        return Err(anyhow::anyhow!("Unknown harness: {}", harness));
+                        return Err(anyhow::anyhow!(
+                            "Unknown harness: '{}'. Available: generic, mock, openshark, hermes, claude_code, codex, opencode",
+                            harness
+                        ));
                     }
                 }
             };
@@ -150,23 +169,26 @@ async fn main() -> anyhow::Result<()> {
                     }
                 }
                 _ => {
-                    println!("AgentBench Results — {} tasks", results.len());
-                    let passed = results.iter().filter(|r| r.passed).count();
+                    let metrics = crate::metrics::RunMetrics::from_results(&results);
+                    println!("AgentBench Results — {} tasks", metrics.total_tasks);
                     println!(
                         "Passed: {}/{} ({:.1}%)",
-                        passed,
-                        results.len(),
-                        if !results.is_empty() {
-                            passed as f64 / results.len() as f64 * 100.0
-                        } else {
-                            0.0
-                        }
+                        metrics.passed_tasks,
+                        metrics.total_tasks,
+                        metrics.pass_rate * 100.0
                     );
+                    println!(
+                        "Tokens: {} ({} in / {} out)",
+                        metrics.total_tokens_input + metrics.total_tokens_output,
+                        metrics.total_tokens_input,
+                        metrics.total_tokens_output
+                    );
+                    println!("Estimated cost: ${:.4}", metrics.total_cost_usd);
                 }
             }
         }
         Commands::List => {
-            println!("Available harnesses: generic, openshark, hermes, claude_code, codex, opencode");
+            println!("Available harnesses: generic, mock, openshark, hermes, claude_code, codex, opencode");
             println!("Available benchmarks: swe_bench, terminal_bench, livecodebench");
         }
         Commands::Tui => {
@@ -178,71 +200,72 @@ async fn main() -> anyhow::Result<()> {
         }
         Commands::Report {
             run_id,
-            format: _,
+            format,
             output,
         } => {
             let db = Arc::new(Database::new("agentbench.db")?);
             let runs = db.get_runs(1000)?;
             let run = runs.iter().find(|r| r.id == run_id).ok_or_else(|| {
                 anyhow::anyhow!(
-                    "Run '{}' not found. Use 'agentbench list' to see available runs.",
+                    "Run '{}' not found. Check the TUI or web dashboard for available runs.",
                     run_id
                 )
             })?;
 
-            let results = db.get_results(&run_id)?;
+            let db_results = db.get_results(&run_id)?;
 
-            let total_tasks = results.len();
-            let passed_tasks = results.iter().filter(|r| r.passed).count();
-            let pass_rate = if total_tasks > 0 {
-                passed_tasks as f64 / total_tasks as f64
-            } else {
-                0.0
+            // Reconstruct full results from the DB rows
+            let results: Vec<crate::benchmark::BenchmarkResult> = db_results
+                .into_iter()
+                .map(|r| crate::benchmark::BenchmarkResult {
+                    task_id: r.task_id,
+                    harness_name: run.harness_name.clone(),
+                    benchmark_name: run.benchmark_name.clone(),
+                    passed: r.passed,
+                    score: r.score,
+                    response: crate::harness::TaskResponse {
+                        task_id: String::new(),
+                        output: r.output.unwrap_or_default(),
+                        patch: r.patch,
+                        tool_calls: vec![],
+                        metadata: Default::default(),
+                        latency_ms: r.latency_ms.unwrap_or(0) as u64,
+                        tokens_input: r.tokens_input.unwrap_or(0) as u64,
+                        tokens_output: r.tokens_output.unwrap_or(0) as u64,
+                    },
+                    validation_output: None,
+                    error: r.error,
+                    started_at: chrono::Utc::now(),
+                    finished_at: chrono::Utc::now(),
+                })
+                .collect();
+
+            let metrics = crate::metrics::RunMetrics::from_results(&results);
+            let report = crate::report::Report {
+                run_id: run.id.clone(),
+                harness_name: run.harness_name.clone(),
+                benchmark_name: run.benchmark_name.clone(),
+                metrics,
+                results,
             };
-            let avg_latency = if total_tasks > 0 {
-                results
-                    .iter()
-                    .filter_map(|r| r.latency_ms)
-                    .sum::<i64>() as f64
-                    / total_tasks as f64
-            } else {
-                0.0
+
+            let rendered = match format.as_str() {
+                "markdown" | "md" => report.to_markdown(),
+                "json" => report.to_json(),
+                "html" => report.to_html(),
+                other => {
+                    return Err(anyhow::anyhow!(
+                        "Unknown report format: '{}'. Use markdown, json, or html.",
+                        other
+                    ))
+                }
             };
-            let total_input: i64 = results.iter().filter_map(|r| r.tokens_input).sum();
-            let total_output: i64 = results.iter().filter_map(|r| r.tokens_output).sum();
-
-            let report = format!(
-                "# AgentBench Report\n\n**Run ID:** {}\n**Harness:** {}\n**Benchmark:** {}\n**Status:** {}\n\n## Summary\n\n- **Total Tasks:** {}\n- **Passed:** {}\n- **Failed:** {}\n- **Pass Rate:** {:.1}%\n- **Avg Latency:** {:.0}ms\n- **Total Tokens:** {} ({} in / {} out)\n\n## Results\n\n| Task | Status | Score | Latency | Tokens |\n|------|--------|-------|---------|--------|\n",
-                run.id,
-                run.harness_name,
-                run.benchmark_name,
-                run.status,
-                total_tasks,
-                passed_tasks,
-                total_tasks - passed_tasks,
-                pass_rate * 100.0,
-                avg_latency,
-                total_input + total_output,
-                total_input,
-                total_output
-            );
-
-            let mut report = report;
-            for r in &results {
-                let status = if r.passed { "PASS" } else { "FAIL" };
-                let latency = r.latency_ms.map(|l| l.to_string()).unwrap_or_else(|| "-".to_string());
-                let tokens = r.tokens_input.unwrap_or(0) + r.tokens_output.unwrap_or(0);
-                report.push_str(&format!(
-                    "| {} | {} | {:.2} | {}ms | {} |\n",
-                    r.task_id, status, r.score, latency, tokens
-                ));
-            }
 
             if let Some(out_path) = output {
-                std::fs::write(&out_path, &report)?;
+                std::fs::write(&out_path, &rendered)?;
                 println!("Report written to {}", out_path);
             } else {
-                println!("{}", report);
+                println!("{}", rendered);
             }
         }
     }
@@ -250,7 +273,10 @@ async fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-fn build_harness_config(harness_name: &str, bench_config: &BenchmarkConfig) -> HarnessAdapterConfig {
+fn build_harness_config(
+    harness_name: &str,
+    bench_config: &BenchmarkConfig,
+) -> HarnessAdapterConfig {
     HarnessAdapterConfig {
         name: harness_name.to_string(),
         endpoint: bench_config.harness.endpoint.clone(),

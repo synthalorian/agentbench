@@ -3,8 +3,8 @@ use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-use crate::error::{BenchError, BenchResult};
 use super::{HarnessAdapter, HarnessAdapterConfig, Task, TaskResponse, ToolCall};
+use crate::error::{BenchError, BenchResult};
 
 pub struct OpenCodeHarness {
     config: Option<HarnessAdapterConfig>,
@@ -48,8 +48,12 @@ struct OpenCodeResponse {
 
 #[async_trait]
 impl HarnessAdapter for OpenCodeHarness {
-    fn name(&self) -> &str { "opencode" }
-    fn description(&self) -> &str { "OpenCode harness — connects to OpenCode CLI or API" }
+    fn name(&self) -> &str {
+        "opencode"
+    }
+    fn description(&self) -> &str {
+        "OpenCode harness — connects to OpenCode CLI or API"
+    }
 
     async fn init(&mut self, config: HarnessAdapterConfig) -> BenchResult<()> {
         self.config = Some(config);
@@ -57,7 +61,9 @@ impl HarnessAdapter for OpenCodeHarness {
     }
 
     async fn execute_task(&self, task: &Task) -> BenchResult<TaskResponse> {
-        let config = self.config.as_ref()
+        let config = self
+            .config
+            .as_ref()
             .ok_or_else(|| BenchError::Harness("OpenCode not initialized".to_string()))?;
 
         let start = std::time::Instant::now();
@@ -70,7 +76,8 @@ impl HarnessAdapter for OpenCodeHarness {
                 files: Some(task.files.clone()),
             };
 
-            let mut req = self.client
+            let mut req = self
+                .client
                 .post(format!("{}/execute", endpoint))
                 .json(&request_body);
 
@@ -101,10 +108,12 @@ impl HarnessAdapter for OpenCodeHarness {
                 .arg("--prompt")
                 .arg(&task.prompt)
                 .output()
-                .map_err(|e| BenchError::Harness(format!(
-                    "Failed to run opencode CLI: {}. Make sure 'opencode' is installed.",
-                    e
-                )))?;
+                .map_err(|e| {
+                    BenchError::Harness(format!(
+                        "Failed to run opencode CLI: {}. Make sure 'opencode' is installed.",
+                        e
+                    ))
+                })?;
 
             let stdout = String::from_utf8_lossy(&output.stdout).to_string();
             let stderr = String::from_utf8_lossy(&output.stderr).to_string();
@@ -139,12 +148,18 @@ impl HarnessAdapter for OpenCodeHarness {
         };
 
         if let Some(endpoint) = &config.endpoint {
-            let resp = self.client.get(format!("{}/health", endpoint))
-                .send().await?;
+            let resp = self
+                .client
+                .get(format!("{}/health", endpoint))
+                .send()
+                .await?;
             Ok(resp.status().is_success())
         } else {
             // Check if opencode CLI is available
-            match std::process::Command::new("opencode").arg("--version").output() {
+            match std::process::Command::new("opencode")
+                .arg("--version")
+                .output()
+            {
                 Ok(output) => Ok(output.status.success()),
                 Err(_) => Ok(false),
             }
@@ -159,8 +174,14 @@ impl HarnessAdapter for OpenCodeHarness {
 fn extract_patch_from_opencode_output(text: &str) -> Option<String> {
     if let Some(start) = text.find("```diff") {
         let patch_start = start + 7;
-        let patch_end = text[patch_start..].find("```").unwrap_or(text.len() - patch_start);
-        Some(text[patch_start..patch_start + patch_end].trim().to_string())
+        let patch_end = text[patch_start..]
+            .find("```")
+            .unwrap_or(text.len() - patch_start);
+        Some(
+            text[patch_start..patch_start + patch_end]
+                .trim()
+                .to_string(),
+        )
     } else if let Some(start) = text.find("diff --git") {
         let patch = &text[start..];
         let end = patch.find("\n\n").unwrap_or(patch.len());

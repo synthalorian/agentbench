@@ -109,6 +109,14 @@ impl CostModel {
 
 pub fn get_cost_model(model: &str) -> Option<CostModel> {
     match model {
+        "gpt-4o" => Some(CostModel {
+            cost_per_1k_input: 0.0025,
+            cost_per_1k_output: 0.01,
+        }),
+        "gpt-4o-mini" => Some(CostModel {
+            cost_per_1k_input: 0.00015,
+            cost_per_1k_output: 0.0006,
+        }),
         "gpt-4" | "gpt-4-turbo" => Some(CostModel {
             cost_per_1k_input: 0.03,
             cost_per_1k_output: 0.06,

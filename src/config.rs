@@ -79,7 +79,7 @@ impl BenchmarkConfig {
         Ok(config)
     }
 
-    fn validate(&self) -> BenchResult<()> {
+    pub fn validate(&self) -> BenchResult<()> {
         if self.name.trim().is_empty() {
             return Err(crate::error::BenchError::Config(
                 "Benchmark 'name' cannot be empty".to_string(),
@@ -95,7 +95,13 @@ impl BenchmarkConfig {
         }
 
         let valid_adapters = [
-            "generic", "openshark", "hermes", "claude_code", "codex", "opencode",
+            "generic",
+            "mock",
+            "openshark",
+            "hermes",
+            "claude_code",
+            "codex",
+            "opencode",
         ];
         if !valid_adapters.contains(&self.harness.adapter.as_str()) {
             return Err(crate::error::BenchError::Config(format!(

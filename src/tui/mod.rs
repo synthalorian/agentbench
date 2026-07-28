@@ -13,10 +13,10 @@ use ratatui::{
 };
 use std::io;
 
-use app::App;
-use ui::draw;
-use std::sync::Arc;
 use crate::db::Database;
+use app::App;
+use std::sync::Arc;
+use ui::draw;
 
 pub async fn run_tui() -> anyhow::Result<()> {
     let db = Arc::new(Database::new("agentbench.db")?);

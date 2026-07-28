@@ -16,9 +16,9 @@ pub enum Commands {
         /// Path to benchmark config YAML
         #[arg(short, long)]
         config: String,
-        /// Harness to benchmark (e.g., generic, openshark, hermes)
-        #[arg(short, long)]
-        harness: String,
+        /// Harness to benchmark (e.g., generic, openshark, hermes, mock). Defaults to the config's harness.adapter; --dry-run implies mock.
+        #[arg(short = 'H', long)]
+        harness: Option<String>,
         /// Output format: table, json, markdown
         #[arg(short, long, default_value = "table")]
         output: String,
@@ -41,7 +41,6 @@ pub enum Commands {
     /// Export results to a report
     Report {
         /// Run ID to report on
-        #[arg(short, long)]
         run_id: String,
         /// Output format: markdown, json, html
         #[arg(short, long, default_value = "markdown")]

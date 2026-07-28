@@ -24,15 +24,21 @@ impl Runner {
         config: &BenchmarkRunConfig,
         bench_config: &crate::config::BenchmarkConfig,
     ) -> BenchResult<Vec<BenchmarkResult>> {
+        let tasks = suite.tasks();
+        let task_count = config.max_tasks.unwrap_or(tasks.len()).min(tasks.len());
+        if task_count == 0 {
+            return Err(BenchError::Benchmark(format!(
+                "Benchmark suite '{}' has no tasks to run",
+                suite.name()
+            )));
+        }
+        let tasks_to_run = &tasks[..task_count];
+
         let run_id = uuid::Uuid::new_v4().to_string();
         let started_at = chrono::Utc::now();
 
         self.db
             .create_run(&run_id, &config.harness_name, suite.name(), started_at)?;
-
-        let tasks = suite.tasks();
-        let task_count = config.max_tasks.unwrap_or(tasks.len()).min(tasks.len());
-        let tasks_to_run = &tasks[..task_count];
 
         let max_workers = bench_config.runner.max_workers.max(1);
         let semaphore = Arc::new(Semaphore::new(max_workers));
@@ -47,7 +53,11 @@ impl Runner {
         let mut handles = vec![];
 
         for task in tasks_to_run.iter() {
-            let permit = semaphore.clone().acquire_owned().await.unwrap();
+            let permit = semaphore
+                .clone()
+                .acquire_owned()
+                .await
+                .map_err(|e| BenchError::TaskExecution(format!("Semaphore closed: {}", e)))?;
             let tx = tx.clone();
             let task = task.clone();
             let harness_task = HarnessTask {

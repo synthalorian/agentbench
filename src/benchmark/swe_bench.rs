@@ -21,6 +21,38 @@ impl SWEBenchSuite {
         Self { tasks: vec![] }
     }
 
+    /// Map one JSON row (SWE-bench dataset format) to a BenchmarkTask
+    fn task_from_value(v: &serde_json::Value, index: usize) -> BenchmarkTask {
+        BenchmarkTask {
+            id: v
+                .get("instance_id")
+                .and_then(|s| s.as_str())
+                .map(|s| s.to_string())
+                .unwrap_or_else(|| format!("task-{}", index)),
+            task_type: "swe_bench".to_string(),
+            repo: v
+                .get("repo")
+                .and_then(|s| s.as_str())
+                .map(|s| s.to_string()),
+            base_commit: v
+                .get("base_commit")
+                .and_then(|s| s.as_str())
+                .map(|s| s.to_string()),
+            problem_statement: v
+                .get("problem_statement")
+                .and_then(|s| s.as_str())
+                .unwrap_or("")
+                .to_string(),
+            hints: vec![],
+            test_patch: v
+                .get("test_patch")
+                .and_then(|s| s.as_str())
+                .map(|s| s.to_string()),
+            expected_files: vec![],
+            metadata: HashMap::new(),
+        }
+    }
+
     /// Apply a patch inside a Docker container and run tests
     async fn validate_in_docker(
         &self,
@@ -57,54 +89,59 @@ impl BenchmarkSuite for SWEBenchSuite {
         match config.source.as_str() {
             "local" => {
                 let path = Path::new(&config.path);
-                if path.extension().and_then(|s| s.to_str()) == Some("json") {
-                    let content = tokio::fs::read_to_string(path).await?;
-                    let raw: Vec<serde_json::Value> = serde_json::from_str(&content)?;
-                    self.tasks = raw
-                        .into_iter()
-                        .enumerate()
-                        .map(|(i, v)| BenchmarkTask {
-                            id: v
-                                .get("instance_id")
-                                .and_then(|s| s.as_str())
-                                .unwrap_or(&format!("task-{}", i))
-                                .to_string(),
-                            task_type: "swe_bench".to_string(),
-                            repo: v
-                                .get("repo")
-                                .and_then(|s| s.as_str())
-                                .map(|s| s.to_string()),
-                            base_commit: v
-                                .get("base_commit")
-                                .and_then(|s| s.as_str())
-                                .map(|s| s.to_string()),
-                            problem_statement: v
-                                .get("problem_statement")
-                                .and_then(|s| s.as_str())
-                                .unwrap_or("")
-                                .to_string(),
-                            hints: vec![],
-                            test_patch: v
-                                .get("test_patch")
-                                .and_then(|s| s.as_str())
-                                .map(|s| s.to_string()),
-                            expected_files: vec![],
-                            metadata: HashMap::new(),
-                        })
-                        .collect();
+                if path.extension().and_then(|s| s.to_str()) != Some("json") {
+                    return Err(BenchError::Benchmark(format!(
+                        "Unsupported dataset format for '{}': expected a .json file",
+                        config.path
+                    )));
                 }
+                let content = tokio::fs::read_to_string(path).await.map_err(|e| {
+                    BenchError::Benchmark(format!(
+                        "Failed to read dataset '{}': {}",
+                        config.path, e
+                    ))
+                })?;
+                let raw: Vec<serde_json::Value> = serde_json::from_str(&content).map_err(|e| {
+                    BenchError::Benchmark(format!(
+                        "Failed to parse dataset '{}' as a JSON array: {}",
+                        config.path, e
+                    ))
+                })?;
+                self.tasks = raw
+                    .iter()
+                    .enumerate()
+                    .map(|(i, v)| Self::task_from_value(v, i))
+                    .collect();
             }
             "huggingface" => {
-                return Err(crate::error::BenchError::Benchmark(
-                    "HuggingFace loading not yet implemented. Download dataset locally and use source: local".to_string()
-                ));
+                let rows = super::huggingface::load_dataset(
+                    &config.path,
+                    config.split.as_deref().unwrap_or("test"),
+                    config.subset.as_deref(),
+                    Some(500),
+                )
+                .await?;
+                self.tasks = rows
+                    .into_iter()
+                    .enumerate()
+                    .map(|(i, row)| {
+                        let v = serde_json::Value::Object(row.into_iter().collect());
+                        Self::task_from_value(&v, i)
+                    })
+                    .collect();
             }
-            _ => {
+            other => {
                 return Err(crate::error::BenchError::Benchmark(format!(
-                    "Unknown dataset source: {}",
-                    config.source
+                    "Unknown dataset source: '{}'. Must be 'local' or 'huggingface'",
+                    other
                 )));
             }
+        }
+        if self.tasks.is_empty() {
+            return Err(BenchError::Benchmark(format!(
+                "Dataset '{}' loaded 0 tasks",
+                config.path
+            )));
         }
         Ok(())
     }
