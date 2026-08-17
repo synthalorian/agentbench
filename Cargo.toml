@@ -2,7 +2,7 @@
 name = "agentbench"
 version = "1.0.0"
 edition = "2021"
-authors = ["synthalorian 🎹🤺 <synthalorian>"]
+authors = ["synth <synthalorian>"]
 description = "Open-source benchmark runner for AI coding agents"
 license = "MIT"
 repository = "https://github.com/synthalorian/agentbench"

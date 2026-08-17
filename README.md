@@ -177,7 +177,7 @@ agentbench/
 
 Apache-2.0 — see [LICENSE](LICENSE)
 
-Made by synthalorian 🎹🤺 with synthshark
+Made by synth with synthshark
 
 ---
 
