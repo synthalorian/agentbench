@@ -82,7 +82,7 @@ agentbench/
 name = "agentbench"
 version = "0.1.0"
 edition = "2021"
-authors = ["synth <synthalorian>"]
+authors = ["synth <synth>"]
 description = "Open-source benchmark runner for AI coding agents"
 license = "MIT"
 repository = "https://github.com/synthalorian/agentbench"
@@ -2724,7 +2724,7 @@ Made by synth with synthshark
 ```
 MIT License
 
-Copyright (c) 2026 synth (synthalorian)
+Copyright (c) 2026 synth
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
